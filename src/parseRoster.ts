@@ -34,19 +34,21 @@ const SKILL_WORDS: Record<string, Skill> = {
   developing: 1,
   low: 1,
   weak: 1,
-  okay: 3,
-  ok: 3,
-  average: 3,
-  intermediate: 3,
-  medium: 3,
-  mid: 3,
-  advanced: 5,
-  strong: 5,
-  high: 5,
+  okay: 5,
+  ok: 5,
+  average: 5,
+  intermediate: 5,
+  medium: 5,
+  mid: 5,
+  advanced: 10,
+  strong: 10,
+  high: 10,
 };
 
 type Columns = {
-  name: number;
+  name?: number;
+  first?: number;
+  last?: number;
   gender?: number;
   period?: number;
   skill?: number;
@@ -62,7 +64,7 @@ function tokenGender(token: string, allowInitial: boolean): Gender | null {
 export function parseSkill(token: string): Skill | null {
   const key = token.trim().toLowerCase().replace(/\.$/, "");
   if (SKILL_WORDS[key]) return SKILL_WORDS[key];
-  if (/^[1-5]$/.test(key)) return Number(key) as Skill;
+  if (/^(?:10|[1-9])$/.test(key)) return Number(key) as Skill;
   return null;
 }
 
@@ -110,23 +112,40 @@ function readColumns(cells: string[], tabs: boolean): Columns | null {
   cells.forEach((cell, index) => {
     const key = cell.trim().toLowerCase().replace(/[.#]/g, "");
     if (key === "name" || key === "player" || key === "student") map.name = index;
-    else if (key === "gender" || key === "sex" || key === "m/f" || key === "boy/girl" || key === "mf") map.gender = index;
+    else if (key === "first" || key === "firstname" || key === "first name" || key === "given" || key === "given name") {
+      map.first = index;
+    } else if (key === "last" || key === "lastname" || key === "last name" || key === "surname" || key === "family") {
+      map.last = index;
+    } else if (key === "gender" || key === "sex" || key === "m/f" || key === "boy/girl" || key === "mf") map.gender = index;
     else if (key === "period" || key === "per" || key === "pd" || key === "class" || key === "class period") {
       map.period = index;
     } else if (key === "skill" || key === "skills" || key === "level" || key === "rating" || key === "ability") {
       map.skill = index;
     }
   });
-  if (map.name === undefined) return null;
-  if (map.gender === undefined && map.period === undefined && map.skill === undefined) return null;
+  const hasName = map.name !== undefined || map.first !== undefined || map.last !== undefined;
+  const hasDetail = map.gender !== undefined || map.period !== undefined || map.skill !== undefined;
+  if (!hasName || !hasDetail) return null;
   return {
     name: map.name,
+    first: map.first,
+    last: map.last,
     gender: map.gender,
     period: map.period,
     skill: map.skill,
     width: cells.length,
     tabs,
   };
+}
+
+function columnName(cells: string[], columns: Columns): string {
+  const first = columns.first === undefined ? "" : (cells[columns.first] ?? "");
+  const last = columns.last === undefined ? "" : (cells[columns.last] ?? "");
+  if (columns.first !== undefined || columns.last !== undefined) {
+    const combined = `${first} ${last}`.trim();
+    if (combined) return combined;
+  }
+  return columns.name === undefined ? "" : (cells[columns.name] ?? "");
 }
 
 function entry(name: string, gender: Gender, period: string, skill: Skill | null): RosterEntry | null {
@@ -140,7 +159,7 @@ function fromColumns(cells: string[], columns: Columns, fallbackPeriod: string):
   const periodCell = columns.period === undefined ? "" : (cells[columns.period] ?? "");
   const skillCell = columns.skill === undefined ? "" : (cells[columns.skill] ?? "");
   return entry(
-    cells[columns.name] ?? "",
+    columnName(cells, columns),
     tokenGender(genderCell, true) ?? "U",
     periodCell || fallbackPeriod,
     parseSkill(skillCell),

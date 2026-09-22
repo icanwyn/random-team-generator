@@ -1,6 +1,6 @@
 export type Gender = "M" | "F" | "U";
 
-export type Skill = 1 | 2 | 3 | 4 | 5;
+export type Skill = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 export type SplitMode = "teams" | "perTeam";
 
@@ -180,7 +180,7 @@ function quotas(count: number, teamCount: number, fromEnd: boolean): number[] {
 }
 
 function sortBySkill(players: readonly Player[], random: () => number): Player[] {
-  return shuffle(players, random).sort((a, b) => (b.skill ?? 3) - (a.skill ?? 3));
+  return shuffle(players, random).sort((a, b) => (b.skill ?? 5.5) - (a.skill ?? 5.5));
 }
 
 /** Snake visits repeat the end of each pass: 0,1,2,3 then 3,2,1,0. */
@@ -233,7 +233,7 @@ function dealGroup(
 }
 
 function skillTotal(players: readonly Player[]): number {
-  return players.reduce((sum, player) => sum + (player.skill ?? 3), 0);
+  return players.reduce((sum, player) => sum + (player.skill ?? 5.5), 0);
 }
 
 function placeBySize(players: readonly Player[], teams: Player[][], bySkill: boolean, random: () => number) {

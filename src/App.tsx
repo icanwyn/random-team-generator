@@ -55,7 +55,8 @@ function normalizePlayer(value: unknown): Player | null {
   if (typeof record.id !== "string" || typeof record.name !== "string") return null;
   if (record.gender !== "M" && record.gender !== "F" && record.gender !== "U") return null;
   const skill = record.skill;
-  const validSkill = skill === 1 || skill === 2 || skill === 3 || skill === 4 || skill === 5 ? skill : null;
+  const validSkill =
+    typeof skill === "number" && Number.isInteger(skill) && skill >= 1 && skill <= 10 ? (skill as Skill) : null;
   return {
     id: record.id,
     name: record.name,
@@ -194,7 +195,7 @@ function sizeNote(groups: Player[][]): string {
 
 function asSkill(value: string): Skill | null {
   const number = Number(value);
-  if (number === 1 || number === 2 || number === 3 || number === 4 || number === 5) return number;
+  if (Number.isInteger(number) && number >= 1 && number <= 10) return number as Skill;
   return null;
 }
 
@@ -248,11 +249,11 @@ function SkillSelect({
       onChange={(event) => onChange(asSkill(event.target.value))}
     >
       <option value="">{compact ? "—" : "Skill"}</option>
-      <option value="1">1</option>
-      <option value="2">2</option>
-      <option value="3">3</option>
-      <option value="4">4</option>
-      <option value="5">5</option>
+      {Array.from({ length: 10 }, (_, index) => index + 1).map((skill) => (
+        <option key={skill} value={skill}>
+          {skill}
+        </option>
+      ))}
     </select>
   );
 }
@@ -488,8 +489,8 @@ export default function App() {
         : "Each team gets as close to the same number of boys and the same number of girls as the period allows.";
 
   const skillHint = activePlayers.some((player) => player.skill !== null)
-    ? "Higher and lower skills are snaked onto every team. 1 is developing, 5 is advanced."
-    : "Add a skill from 1 to 5 for this to change the draw.";
+    ? "Higher and lower skills are snaked onto every team. 1 is developing, 10 is advanced."
+    : "Add a skill from 1 to 10 for this to change the draw.";
 
   const drawLabel = draw
     ? "Draw again"
@@ -582,7 +583,7 @@ export default function App() {
               value={paste}
               onChange={(event) => setPaste(event.target.value)}
               spellCheck={false}
-              placeholder={"Period 1\nAvery Chen F 4\nJordan Patel, M, 2\n\nPeriod 2\nSam Rivera 3"}
+              placeholder={"first,last,period,gender,skill\nAvery,Chen,1,F,8\nJordan,Patel,1,M,3\nSam,Rivera,2,F,10"}
             />
             <div className="row-actions">
               <button type="button" className="ghost" data-testid="paste-add" onClick={addPasted}>
@@ -591,6 +592,9 @@ export default function App() {
               <button type="button" className="ghost" onClick={() => fileRef.current?.click()}>
                 {players.length === 0 ? "Load roster file" : "Replace from file"}
               </button>
+              <a className="ghost" href="/sample-roster.csv" download="sample-roster.csv">
+                Sample CSV
+              </a>
               <input
                 ref={fileRef}
                 className="file-input"
@@ -619,8 +623,8 @@ export default function App() {
             </p>
             {players.length === 0 ? (
               <p className="empty">
-                Players you add will show up here. A file can be a spreadsheet with Name, Gender, Period, and Skill
-                columns, or a list with a Period heading before each class.
+                Players you add will show up here. Download the sample CSV and keep the header
+                first, last, period, gender, skill. Skill is a number from 1 to 10.
               </p>
             ) : (
               <div className="player-list">

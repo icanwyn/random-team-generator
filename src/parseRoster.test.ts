@@ -58,8 +58,25 @@ describe("parseRosterLines", () => {
       { name: "Chen, Avery", gender: "U", period: "2", skill: null },
       { name: "Maya Thompson", gender: "F", period: "3", skill: 5 },
       { name: "Sam Rivera", gender: "U", period: "3", skill: 2 },
-      { name: "Cruz, Ana", gender: "F", period: "3", skill: 5 },
+      { name: "Cruz, Ana", gender: "F", period: "3", skill: 10 },
       { name: "Noah Kim", gender: "M", period: "3", skill: 1 },
+    ]);
+  });
+
+  it("reads first, last, period, gender, and skill from 1 to 10", () => {
+    const parsed = parseRosterLines(`
+      first,last,period,gender,skill
+      Avery,Chen,1,F,8
+      Jordan,Patel,1,M,3
+      Sam,Rivera,2,,10
+      Riley,Quinn,2,girl,1
+    `);
+
+    expect(parsed).toEqual([
+      { name: "Avery Chen", gender: "F", period: "1", skill: 8 },
+      { name: "Jordan Patel", gender: "M", period: "1", skill: 3 },
+      { name: "Sam Rivera", gender: "U", period: "2", skill: 10 },
+      { name: "Riley Quinn", gender: "F", period: "2", skill: 1 },
     ]);
   });
 });

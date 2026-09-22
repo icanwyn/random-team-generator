@@ -3,10 +3,15 @@ import {
   describePlan,
   drawTeams,
   formatTeams,
+  groupByPeriod,
   planSplit,
   tally,
   type Player,
+  type Skill,
 } from "./generateTeams.ts";
+
+const genderOn = { gender: true, skill: false };
+const neither = { gender: false, skill: false };
 
 function rng(seed: number): () => number {
   let state = seed >>> 0;
@@ -21,14 +26,28 @@ function makePlayers(counts: { M?: number; F?: number; U?: number }): Player[] {
   (["M", "F", "U"] as const).forEach((gender) => {
     const total = counts[gender] ?? 0;
     for (let index = 0; index < total; index += 1) {
-      players.push({ id: `${gender}${index}`, name: `${gender} ${index}`, gender });
+      players.push({ id: `${gender}${index}`, name: `${gender} ${index}`, gender, period: "", skill: null });
     }
   });
   return players;
 }
 
+function rated(skill: number, gender: Player["gender"], index: number): Player {
+  return {
+    id: `${gender}${skill}${index}`,
+    name: `${gender}${skill}`,
+    gender,
+    period: "",
+    skill: skill as Skill,
+  };
+}
+
 function genderCounts(teams: Player[][], gender: Player["gender"]) {
   return teams.map((team) => team.filter((player) => player.gender === gender).length);
+}
+
+function skillSum(team: Player[]) {
+  return team.reduce((sum, player) => sum + (player.skill ?? 0), 0);
 }
 
 describe("planSplit", () => {
@@ -74,7 +93,7 @@ describe("drawTeams", () => {
     for (const spec of cases) {
       const players = makePlayers(spec);
       for (let seed = 1; seed <= 20; seed += 1) {
-        const teams = drawTeams(players, spec.teams, true, rng(seed));
+        const teams = drawTeams(players, spec.teams, genderOn, rng(seed));
         const sizes = teams.map((team) => team.length);
         expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
         expect(Math.max(...genderCounts(teams, "M")) - Math.min(...genderCounts(teams, "M"))).toBeLessThanOrEqual(1);
@@ -87,7 +106,7 @@ describe("drawTeams", () => {
   });
 
   it("offsets boy and girl extras so one team does not absorb both", () => {
-    const teams = drawTeams(makePlayers({ M: 6, F: 2 }), 4, true, rng(1));
+    const teams = drawTeams(makePlayers({ M: 6, F: 2 }), 4, genderOn, rng(1));
     expect(teams.map((team) => team.length).every((size) => size === 2)).toBe(true);
     expect(genderCounts(teams, "M").sort()).toEqual([1, 1, 2, 2]);
     expect(genderCounts(teams, "F").sort()).toEqual([0, 0, 1, 1]);
@@ -95,33 +114,63 @@ describe("drawTeams", () => {
 
   it("can leave gender uneven when balance is off", () => {
     const players: Player[] = [
-      { id: "f1", name: "F1", gender: "F" },
-      { id: "f2", name: "F2", gender: "F" },
-      { id: "f3", name: "F3", gender: "F" },
-      { id: "m1", name: "M1", gender: "M" },
-      { id: "f4", name: "F4", gender: "F" },
-      { id: "m2", name: "M2", gender: "M" },
+      { id: "f1", name: "F1", gender: "F", period: "", skill: null },
+      { id: "f2", name: "F2", gender: "F", period: "", skill: null },
+      { id: "f3", name: "F3", gender: "F", period: "", skill: null },
+      { id: "m1", name: "M1", gender: "M", period: "", skill: null },
+      { id: "f4", name: "F4", gender: "F", period: "", skill: null },
+      { id: "m2", name: "M2", gender: "M", period: "", skill: null },
     ];
     const identity = () => 0.999999;
-    const unbalanced = drawTeams(players, 2, false, identity);
+    const unbalanced = drawTeams(players, 2, neither, identity);
     const girlSpread =
       Math.max(...genderCounts(unbalanced, "F")) - Math.min(...genderCounts(unbalanced, "F"));
     expect(girlSpread).toBe(2);
 
-    const balanced = drawTeams(players, 2, true, identity);
+    const balanced = drawTeams(players, 2, genderOn, identity);
     expect(genderCounts(balanced, "F")).toEqual([2, 2]);
     expect(genderCounts(balanced, "M")).toEqual([1, 1]);
   });
 
+  it("snakes skills so team totals stay close", () => {
+    const players = [1, 2, 3, 4, 5, 5].map((skill, index) => rated(skill, "U", index));
+    const teams = drawTeams(players, 2, { gender: false, skill: true }, rng(4));
+    expect(teams.map(skillSum).sort()).toEqual([10, 10]);
+  });
+
+  it("spreads skill inside each gender", () => {
+    const players = [
+      rated(4, "M", 1),
+      rated(3, "M", 2),
+      rated(2, "M", 3),
+      rated(1, "M", 4),
+      rated(5, "F", 1),
+      rated(1, "F", 2),
+    ];
+    const teams = drawTeams(players, 2, { gender: true, skill: true }, rng(3));
+    expect(genderCounts(teams, "M")).toEqual([2, 2]);
+    expect(genderCounts(teams, "F")).toEqual([1, 1]);
+    expect(teams.map(skillSum).sort((a, b) => a - b)).toEqual([6, 10]);
+  });
+
   it("lists names alphabetically and formats a pasteable draw", () => {
     const players: Player[] = [
-      { id: "1", name: "Zoe", gender: "F" },
-      { id: "2", name: "adam", gender: "M" },
+      { id: "1", name: "Zoe", gender: "F", period: "", skill: null },
+      { id: "2", name: "adam", gender: "M", period: "", skill: null },
     ];
-    const teams = drawTeams(players, 2, true, rng(2));
+    const teams = drawTeams(players, 2, genderOn, rng(2));
     const named = teams.map((group, index) => ({ name: `Team ${index + 1}`, players: group }));
     expect(teams.map((team) => team.map((player) => player.name))).toEqual([["adam"], ["Zoe"]]);
     expect(formatTeams(named)).toBe("Team 1\n- adam (M)\n1 boy\n\nTeam 2\n- Zoe (F)\n1 girl");
     expect(tally(players)).toEqual({ total: 2, boys: 1, girls: 1, unspecified: 0 });
+  });
+
+  it("keeps periods in numeric order and leaves unlabeled players last", () => {
+    const players: Player[] = [
+      { id: "a", name: "A", gender: "M", period: "10", skill: null },
+      { id: "b", name: "B", gender: "F", period: "2", skill: null },
+      { id: "c", name: "C", gender: "U", period: "", skill: null },
+    ];
+    expect(groupByPeriod(players).map((group) => group.period)).toEqual(["2", "10", ""]);
   });
 });

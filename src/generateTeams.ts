@@ -1,22 +1,27 @@
 export type Gender = "M" | "F" | "U";
 
+export type Skill = 1 | 2 | 3 | 4 | 5;
+
 export type SplitMode = "teams" | "perTeam";
 
 export type Player = {
   id: string;
   name: string;
   gender: Gender;
+  period: string;
+  skill: Skill | null;
+};
+
+export type DrawOptions = {
+  gender: boolean;
+  skill: boolean;
 };
 
 export type SplitPlan =
   | { ok: true; teamCount: number; minSize: number; maxSize: number }
   | { ok: false; error: string };
 
-export function planSplit(
-  playerCount: number,
-  mode: SplitMode,
-  count: number,
-): SplitPlan {
+export function planSplit(playerCount: number, mode: SplitMode, count: number): SplitPlan {
   if (playerCount < 2) {
     return { ok: false, error: "Add at least 2 players." };
   }
@@ -79,10 +84,20 @@ export function genderSummary(players: readonly Player[]): string {
   const parts: string[] = [];
   if (counts.boys) parts.push(`${counts.boys} ${counts.boys === 1 ? "boy" : "boys"}`);
   if (counts.girls) parts.push(`${counts.girls} ${counts.girls === 1 ? "girl" : "girls"}`);
-  if (counts.unspecified) {
-    parts.push(`${counts.unspecified} not specified`);
-  }
+  if (counts.unspecified) parts.push(`${counts.unspecified} not specified`);
   return parts.join(", ");
+}
+
+export function skillSummary(players: readonly Player[]): string {
+  const rated = players.filter((player) => player.skill !== null);
+  if (rated.length === 0) return "";
+  const average = rated.reduce((sum, player) => sum + (player.skill ?? 0), 0) / rated.length;
+  const text = Number.isInteger(average) ? String(average) : average.toFixed(1);
+  return `skill avg ${text}`;
+}
+
+export function teamSummary(players: readonly Player[]): string {
+  return [genderSummary(players), skillSummary(players)].filter(Boolean).join(" · ");
 }
 
 export function parseTeamNames(text: string): string[] {
@@ -92,17 +107,49 @@ export function parseTeamNames(text: string): string[] {
     .filter(Boolean);
 }
 
-export function formatTeams(
-  teams: readonly { name: string; players: readonly Player[] }[],
-): string {
+export function groupByPeriod(players: readonly Player[]): { period: string; players: Player[] }[] {
+  const buckets = new Map<string, Player[]>();
+  for (const player of players) {
+    const period = player.period.trim();
+    const list = buckets.get(period) ?? [];
+    list.push(player);
+    buckets.set(period, list);
+  }
+  return [...buckets.keys()]
+    .sort((a, b) => {
+      if (a === "") return 1;
+      if (b === "") return -1;
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    })
+    .map((period) => ({ period, players: buckets.get(period) ?? [] }));
+}
+
+function formatPlayer(player: Player): string {
+  const marks: string[] = [];
+  if (player.gender !== "U") marks.push(player.gender);
+  if (player.skill !== null) marks.push(`skill ${player.skill}`);
+  const suffix = marks.length > 0 ? ` (${marks.join(", ")})` : "";
+  return `- ${player.name}${suffix}`;
+}
+
+export function formatTeams(teams: readonly { name: string; players: readonly Player[] }[]): string {
   return teams
     .map((team) => {
-      const lines = team.players.map((player) => {
-        const mark = player.gender === "U" ? "" : ` (${player.gender})`;
-        return `- ${player.name}${mark}`;
-      });
-      return [team.name, ...lines, genderSummary(team.players)].filter(Boolean).join("\n");
+      const lines = team.players.map(formatPlayer);
+      return [team.name, ...lines, teamSummary(team.players)].filter(Boolean).join("\n");
     })
+    .join("\n\n");
+}
+
+export function formatDraw(
+  blocks: readonly { period: string; teams: readonly { name: string; players: readonly Player[] }[] }[],
+): string {
+  return blocks
+    .map((block) => {
+      const body = formatTeams(block.teams);
+      return block.period ? `Period ${block.period}\n\n${body}` : body;
+    })
+    .filter(Boolean)
     .join("\n\n");
 }
 
@@ -117,34 +164,89 @@ function shuffle<T>(items: readonly T[], random: () => number): T[] {
   return next;
 }
 
-/** Extras go to the front, or the back, so two groups don't stack their remainders on the same team. */
-function placeEvenly(players: Player[], teams: Player[][], fromEnd: boolean) {
-  const teamCount = teams.length;
-  if (players.length === 0 || teamCount === 0) return;
-  const base = Math.floor(players.length / teamCount);
-  let extra = players.length % teamCount;
-  let cursor = 0;
+function quotas(count: number, teamCount: number, fromEnd: boolean): number[] {
+  const base = Math.floor(count / teamCount);
+  let extra = count % teamCount;
+  const amounts = Array.from({ length: teamCount }, () => base);
   const order = fromEnd
     ? Array.from({ length: teamCount }, (_, index) => teamCount - 1 - index)
     : Array.from({ length: teamCount }, (_, index) => index);
+  for (const index of order) {
+    if (extra === 0) break;
+    amounts[index] += 1;
+    extra -= 1;
+  }
+  return amounts;
+}
 
-  for (const teamIndex of order) {
-    const take = base + (extra > 0 ? 1 : 0);
-    if (extra > 0) extra -= 1;
-    for (let step = 0; step < take; step += 1) {
-      teams[teamIndex].push(players[cursor]);
-      cursor += 1;
+function sortBySkill(players: readonly Player[], random: () => number): Player[] {
+  return shuffle(players, random).sort((a, b) => (b.skill ?? 3) - (a.skill ?? 3));
+}
+
+/** Snake visits repeat the end of each pass: 0,1,2,3 then 3,2,1,0. */
+function visitTeams(teamCount: number, fromEnd: boolean): () => number {
+  let forward = !fromEnd;
+  let row = forward
+    ? Array.from({ length: teamCount }, (_, index) => index)
+    : Array.from({ length: teamCount }, (_, index) => teamCount - 1 - index);
+  let cursor = 0;
+  return () => {
+    const team = row[cursor] ?? 0;
+    cursor += 1;
+    if (cursor >= row.length) {
+      forward = !forward;
+      row = forward
+        ? Array.from({ length: teamCount }, (_, index) => index)
+        : Array.from({ length: teamCount }, (_, index) => teamCount - 1 - index);
+      cursor = 0;
     }
+    return team;
+  };
+}
+
+function dealGroup(
+  players: readonly Player[],
+  teams: Player[][],
+  fromEnd: boolean,
+  bySkill: boolean,
+  random: () => number,
+) {
+  if (players.length === 0 || teams.length === 0) return;
+  const limits = quotas(players.length, teams.length, fromEnd);
+  const ordered = bySkill ? sortBySkill(players, random) : shuffle(players, random);
+  const filled = Array.from({ length: teams.length }, () => 0);
+  const visit = visitTeams(teams.length, fromEnd);
+  let placed = 0;
+  let guard = 0;
+  while (placed < ordered.length && guard < ordered.length * teams.length * 2 + 4) {
+    guard += 1;
+    const teamIndex = visit();
+    if (filled[teamIndex] < limits[teamIndex]) {
+      teams[teamIndex].push(ordered[placed]);
+      filled[teamIndex] += 1;
+      placed += 1;
+    }
+  }
+  if (placed !== ordered.length) {
+    throw new Error("Could not place every player.");
   }
 }
 
-function placeBySize(players: Player[], teams: Player[][]) {
+function skillTotal(players: readonly Player[]): number {
+  return players.reduce((sum, player) => sum + (player.skill ?? 3), 0);
+}
+
+function placeBySize(players: readonly Player[], teams: Player[][], bySkill: boolean, random: () => number) {
+  const ordered = bySkill ? sortBySkill(players, random) : shuffle(players, random);
   let cursor = 0;
-  for (const player of players) {
+  for (const player of ordered) {
     let target = cursor % teams.length;
     for (let step = 1; step < teams.length; step += 1) {
       const index = (cursor + step) % teams.length;
-      if (teams[index].length < teams[target].length) target = index;
+      const smaller = teams[index].length < teams[target].length;
+      const sameSize = teams[index].length === teams[target].length;
+      const lowerSkill = skillTotal(teams[index]) < skillTotal(teams[target]);
+      if (smaller || (bySkill && sameSize && lowerSkill)) target = index;
     }
     teams[target].push(player);
     cursor = target + 1;
@@ -158,7 +260,7 @@ function byName(a: Player, b: Player) {
 export function drawTeams(
   players: readonly Player[],
   teamCount: number,
-  balance: boolean,
+  options: DrawOptions,
   random: () => number = Math.random,
 ): Player[][] {
   if (teamCount < 1 || teamCount > players.length) {
@@ -167,14 +269,33 @@ export function drawTeams(
 
   const teams: Player[][] = Array.from({ length: teamCount }, () => []);
 
-  if (!balance) {
+  if (!options.gender && !options.skill) {
     shuffle(players, random).forEach((player, index) => {
       teams[index % teamCount].push(player);
     });
+  } else if (!options.gender) {
+    dealGroup(players, teams, false, true, random);
   } else {
-    placeEvenly(shuffle(players.filter((player) => player.gender === "M"), random), teams, false);
-    placeEvenly(shuffle(players.filter((player) => player.gender === "F"), random), teams, true);
-    placeBySize(shuffle(players.filter((player) => player.gender === "U"), random), teams);
+    dealGroup(
+      players.filter((player) => player.gender === "M"),
+      teams,
+      false,
+      options.skill,
+      random,
+    );
+    dealGroup(
+      players.filter((player) => player.gender === "F"),
+      teams,
+      true,
+      options.skill,
+      random,
+    );
+    placeBySize(
+      players.filter((player) => player.gender === "U"),
+      teams,
+      options.skill,
+      random,
+    );
   }
 
   return teams.map((team) => team.slice().sort(byName));

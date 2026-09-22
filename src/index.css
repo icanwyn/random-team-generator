@@ -101,9 +101,17 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.03e
 
 .add-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) 6.2rem 6.2rem;
   gap: 10px;
   align-items: end;
+}
+
+.add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
 }
 
 .grow { min-width: 0; }
@@ -207,12 +215,13 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.03e
 .empty { margin: 8px 0 0; color: var(--muted); }
 
 .player-list {
-  list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 440px;
+  max-height: 480px;
   overflow: auto;
 }
+
+.player-list ul { list-style: none; margin: 0; padding: 0; }
 
 .player {
   display: flex;
@@ -240,6 +249,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.03e
   background: var(--moss);
   color: var(--green);
   line-height: 1.4;
+  white-space: pre-wrap;
 }
 
 .plan.bad { background: #f8ece7; color: var(--clay); }
@@ -308,9 +318,43 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.03e
 
 .tag.f { background: #f6eee4; color: var(--clay); }
 
+.tag.skill { background: #efe8d6; color: #5c4a1f; }
+
+.file-input { display: none; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+
+.chip {
+  min-height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.chip.on { background: var(--green); border-color: var(--green); color: #f4f7f2; }
+
+.period-label, .period-result-title {
+  margin: 14px 0 0;
+  font-family: var(--serif);
+  font-size: 1.25rem;
+}
+
+.period-block { margin-top: 8px; }
+
+.period-edit { width: 4.4rem; min-height: 44px; padding: 0 8px; }
+
+.skill-select { min-height: 44px; }
+
+.skill-select.compact { width: 4.4rem; padding: 0 6px; }
+
+.marks { display: inline-flex; gap: 4px; align-items: center; }
+
 @media (max-width: 860px) {
   .layout { grid-template-columns: 1fr; }
-  .add-form { grid-template-columns: 1fr; }
+  .add-form { grid-template-columns: 1fr 1fr; }
+  .add-form .grow { grid-column: 1 / -1; }
   .add-button { width: 100%; }
   .results-head { flex-direction: column; align-items: stretch; }
 }

@@ -1,6 +1,6 @@
 # Team Generator
 
-Live app: https://random-team-generator-eight.vercel.app
+Live app: https://teamsters.vercel.app
 
 A small app for coaches and teachers. Load a whole class roster separated by period, choose the number of teams or how many players go on each team, and draw a random split. Turn on **Balance boys and girls** or **Balance skills** when every team should get a fair mix.
 

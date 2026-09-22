@@ -1,5 +1,7 @@
 # Team Generator
 
+Live app: https://random-team-generator-eight.vercel.app
+
 A small app for coaches and teachers. Enter a roster, choose the number of teams or how many players go on each team, and draw a random split. Turn on **Balance boys and girls** when every team should get a fair mix.
 
 Rosters stay in the browser. Nothing is uploaded.
